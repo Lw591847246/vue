@@ -1,4 +1,5 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 # vue-project
 
 This template should help get you started developing with Vue 3 in Vite.
@@ -136,3 +137,7 @@ For open source projects, say how it is licensed.
 ## Project status
 If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
 >>>>>>> bdfd17e0ee7f04acc01890a1d0d61af0b46bb8b3
+=======
+# vue
+vue test
+>>>>>>> 20eb40a7c5354777a4e8c70b861ca2e6f3ae87d9
