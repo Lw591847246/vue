@@ -20,6 +20,12 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
+      host: '0.0.0.0',          // 允许外部访问
+      allowedHosts: [
+        '710a15e2.r26.cpolar.top',  // 你的 cpolar 域名
+        'localhost',
+        '127.0.0.1'
+      ],
       port: 5173,
       proxy: {
         // SSO 服务（登录、权限）
@@ -38,6 +44,11 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
         },
         // 其他服务按需添加...
+        '/agent/v1': {
+          target: `${baseUrl}:${SERVICE_PORTS['sumec-ai']}`,
+          changeOrigin: true,
+          // 如果接口路径是 /chat，无需 rewrite；如果后端是 /api/chat 等，按需调整
+        }
       },
     },
   }

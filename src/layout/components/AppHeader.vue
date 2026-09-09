@@ -2,7 +2,13 @@
     <header class="header">
         <!-- 左侧：Logo + 微服务导航 -->
         <div class="header-left">
-            <span class="logo">综合信息管理平台</span>
+
+            <!-- 折叠按钮 -->
+            <el-icon class="collapse-btn" @click="appStore.toggleSidebar()">
+                <fold v-if="!appStore.sidebarCollapsed" />
+                <expand v-else />
+            </el-icon>
+            <span class="logo">AI-agent</span>
             <nav class="top-nav">
                 <span v-for="menu in permissionStore.topMenus" :key="menu.id" class="top-nav-item"
                     :class="{ active: menu.id === permissionStore.currentTopMenuId }"
@@ -34,7 +40,8 @@ import { useUserStore } from '@/stores/modules/user'
 import { usePermissionStore } from '@/stores/modules/permission'
 import { useRouter } from 'vue-router'
 import type { MenuItem } from '@/api/services/auth/modules/permission'
-
+import { useAppStore } from '@/stores/modules/app'
+const appStore = useAppStore()
 const userStore = useUserStore()
 const permissionStore = usePermissionStore()
 const router = useRouter()
@@ -53,6 +60,14 @@ function handleCommand(command: string) {
 </script>
 
 <style scoped>
+
+.collapse-btn {
+  cursor: pointer;
+  font-size: 20px;
+  color: #fff;
+  margin-right: 10px;
+}
+
 .header {
     display: flex;
     align-items: center;

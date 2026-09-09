@@ -12,4 +12,6 @@ export const SERVICE_PORTS: Record<string, number> = {
   'sumec-wf': 8011,
   'sumec-notify': 8012,
   'sumec-qms': 8013,
+  'sumec-ai': 9000,
+
 }
