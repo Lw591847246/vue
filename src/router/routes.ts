@@ -20,4 +20,11 @@ export const constantRoutes: RouteRecordRaw[] = [
       // 这里可以继续添加静态子路由，或通过动态路由添加
     ],
   },
+
+  {
+  path: '/register',
+  name: 'Register',
+  component: () => import('@/views/register/index.vue'),
+  meta: { hidden: true },
+},
 ]

@@ -13,6 +13,7 @@ export interface ChatMessage {
   thinkingDone?: boolean
   duration?: string
   imageUrl?: string
+  files?: string[]   // 用户消息附带的文件名列表
 }
 
 export interface ChatResponse {

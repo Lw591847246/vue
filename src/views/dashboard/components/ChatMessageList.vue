@@ -4,6 +4,9 @@
       <!-- 用户消息（右侧） -->
       <div v-if="msg.role === 'user'" class="user-message">
         <div class="user-content">{{ msg.user }}</div>
+        <div v-if="msg.files && msg.files.length > 0" class="user-files">
+          <div v-for="file in msg.files" :key="file" class="user-file-item">📄 {{ file }}</div>
+        </div>
       </div>
       <!-- 机器人消息（左侧） -->
       <div v-else class="bot-message">
@@ -18,18 +21,15 @@
 
         <div class="answer-content" v-html="renderBotContent(msg.bot || '')"></div>
 
-        <div v-if="msg.duration" class="duration-info">
-          耗时 {{ msg.duration }} 秒
-        </div>
+        <div v-if="msg.duration" class="duration-info">耗时 {{ msg.duration }} 秒</div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref ,watch,nextTick } from 'vue'
+import { ref, watch, nextTick } from 'vue'
 import type { ChatMessage } from '@/types/agent/agent'
-
 
 const props = defineProps<{ messages: ChatMessage[] }>()
 
@@ -51,13 +51,17 @@ function renderBotContent(text: string): string {
   const codeBlocks: string[] = []
   let processed = escaped.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
     const placeholder = `@@CODE_BLOCK_${codeBlocks.length}@@`
-    codeBlocks.push(`<pre class="code-block"><code class="language-${lang || 'text'}">${code}</code></pre>`)
+    codeBlocks.push(
+      `<pre class="code-block"><code class="language-${lang || 'text'}" style="white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; max-width: 100%;">${code}</code></pre>`,
+    )
     return placeholder
   })
 
-  // 2. 处理标题（## 和 ### 等）
+  // 2. 处理标题（## 和 ###  ####等）
   processed = processed.replace(/^#{2}\s+(.*)$/gm, '<h2>$1</h2>')
   processed = processed.replace(/^#{3}\s+(.*)$/gm, '<h3>$1</h3>')
+  processed = processed.replace(/^#{4}\s+(.*)$/gm, '<h4>$1</h4>')
+
   // 可根据需要继续添加 h4, h5
 
   // 3. 处理无序列表（* 或 - 开头）
@@ -65,9 +69,9 @@ function renderBotContent(text: string): string {
   processed = processed.replace(/((?:^[*\-]\s+.*(?:\n|$))+)/gm, (listBlock) => {
     const items = listBlock
       .split('\n')
-      .filter(line => line.trim())
-      .map(line => line.replace(/^[*\-]\s+/, ''))
-      .map(item => `<li>${item}</li>`)
+      .filter((line) => line.trim())
+      .map((line) => line.replace(/^[*\-]\s+/, ''))
+      .map((item) => `<li>${item}</li>`)
       .join('')
     return `<ul>${items}</ul>`
   })
@@ -76,9 +80,9 @@ function renderBotContent(text: string): string {
   processed = processed.replace(/((?:^\d+\.\s+.*(?:\n|$))+)/gm, (listBlock) => {
     const items = listBlock
       .split('\n')
-      .filter(line => line.trim())
-      .map(line => line.replace(/^\d+\.\s+/, ''))
-      .map(item => `<li>${item}</li>`)
+      .filter((line) => line.trim())
+      .map((line) => line.replace(/^\d+\.\s+/, ''))
+      .map((item) => `<li>${item}</li>`)
       .join('')
     return `<ol>${items}</ol>`
   })
@@ -87,8 +91,9 @@ function renderBotContent(text: string): string {
   processed = processed.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
 
   // 6. 恢复代码块
-  processed = processed.replace(/@@CODE_BLOCK_(\d+)@@/g, (_, index) => codeBlocks[Number(index)])
-
+  processed = processed.replace(/@@CODE_BLOCK_(\d+)@@/g, (_, index) => {
+    return codeBlocks[Number(index)] ?? ''
+  })
   return processed
 }
 
@@ -99,9 +104,8 @@ watch(
     if (messageListRef.value) {
       messageListRef.value.scrollTop = messageListRef.value.scrollHeight
     }
-  }
+  },
 )
-
 
 // 暴露内部 ref，供父组件滚动控制
 defineExpose({ messageListRef })
@@ -159,7 +163,19 @@ defineExpose({ messageListRef })
   color: #666;
   margin-bottom: 6px;
 }
-
+.user-files {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: #666;
+}
+.user-file-item {
+  background: rgba(255,255,255,0.6);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
 .thinking-content {
   font-size: 0.85rem;
   color: #888;
@@ -191,6 +207,11 @@ defineExpose({ messageListRef })
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
   font-size: 0.9rem;
   line-height: 1.5;
+  max-width: 100%; /* 确保不超出父容器 */
+  white-space: pre-wrap; /* 保留空格和换行，但允许自动换行 */
+  word-break: break-word; /* 在长单词内部断行 */
+  overflow-wrap: anywhere; /* 在任意字符处断行，防止溢出 */
+  max-width: 100%; /* 确保不超出父容器 */
 }
 
 .duration-info {

@@ -11,7 +11,7 @@
 
     <!-- 右侧聊天主区域 -->
     <div class="chat-main">
-      <!-- 折叠/展开按钮（所有设备显示） -->
+      <!-- 折叠/展开按钮 -->
       <div class="toggle-btn" @click="toggleSidebar">
         <el-icon>
           <expand v-if="sidebarCollapsed" />
@@ -34,47 +34,79 @@
           :messages="messages"
         />
 
-        <!-- OCR 组件（可切换显示） -->
-        <OcrUploader
-          v-if="showOcr"
-          @ocr-results="handleOcrResults"
-        />
+        <div class="input-area">
+          <!-- 隐藏的文件输入 -->
+          <input
+            type="file"
+            multiple
+            style="display: none"
+            ref="fileInput"
+            accept="image/*,.pdf,.doc,.docx"
+            @change="handleFileChange"
+          />
 
-        <!-- 输入区 -->
-        <ChatInput
-          :loading="loading"
-          @send="handleSend"
-          @toggle-ocr="showOcr = !showOcr"
-        />
+          <!-- 已选文件列表（文本框上方） -->
+          <div v-if="attachedFiles.length > 0" class="file-list">
+            <div v-for="(file, index) in attachedFiles" :key="file.name + index" class="file-item">
+              <span class="file-name">{{ file.name }}</span>
+              <el-icon class="file-remove" @click="removeFile(index)"><close /></el-icon>
+            </div>
+          </div>
+
+          <!-- 带内部按钮的输入容器 -->
+          <div class="input-wrapper">
+            <el-input
+              v-model="inputText"
+              type="textarea"
+              :rows="4"
+              placeholder="请输入消息，Enter 发送，Shift+Enter 换行；可附加文件一起发送"
+              resize="none"
+              @keydown.enter.exact.prevent="handleSend"
+            />
+            <div class="input-actions">
+              <el-button class="attach-btn" :icon="Paperclip" circle @click="fileInput?.click()" />
+              <el-button
+                class="send-btn"
+                :class="{ 'is-loading': loading }"
+                :disabled="loading"
+                @click="handleSend"
+              >
+                <el-icon v-if="!loading"><ArrowUp /></el-icon>
+                <span v-else class="stop-icon"></span>
+              </el-button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import ConversationSidebar from './components/ConversationSidebar.vue'
 import ChatMessageList from './components/ChatMessageList.vue'
-import ChatInput from './components/ChatInput.vue'
-import OcrUploader from './components/OcrUploader.vue'
 import { useChatConversation } from '@/composables/useChatConversation'
-import type { OcrResultItem } from '@/types/agent/agent'
+import { ElMessage } from 'element-plus'
+import { Paperclip, ArrowUp } from '@element-plus/icons-vue'
 
 const {
   conversations,
   currentSessionId,
   messages,
   loading,
+  sendFileMessage, // 新增方法
   loadingHistory,
   loadConversations,
   startNewConversation,
   selectConversation,
   sendMessage,
-  addOcrResult,
 } = useChatConversation()
 
 const sidebarCollapsed = ref(false)
-const showOcr = ref(false)
+const inputText = ref('')
+const attachedFiles = ref<File[]>([])
+const fileInput = ref<HTMLInputElement | null>(null)
 const messageListRef = ref<InstanceType<typeof ChatMessageList> | null>(null)
 
 function isMobile() {
@@ -87,32 +119,56 @@ function toggleSidebar() {
 
 async function handleNewConversation() {
   await startNewConversation()
-  if (isMobile()) {
-    sidebarCollapsed.value = true
-  }
+  if (isMobile()) sidebarCollapsed.value = true
 }
 
 async function handleSelectConversation(sessionId: string) {
   await selectConversation(sessionId)
-  if (isMobile()) {
-    sidebarCollapsed.value = true
-  }
+  if (isMobile()) sidebarCollapsed.value = true
 }
 
-async function handleSend(text: string) {
-  await sendMessage(text)
+function handleFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const files = input.files
+  if (files && files.length > 0) {
+    // 追加文件，并简单去重（按文件名+大小）
+    const newFiles = Array.from(files)
+    for (const file of newFiles) {
+      const exists = attachedFiles.value.some((f) => f.name === file.name && f.size === file.size)
+      if (!exists) {
+        attachedFiles.value.push(file)
+      }
+    }
+  }
+  // 重置输入框值，允许再次选择相同文件
+  input.value = ''
+}
+
+function removeFile(index: number) {
+  attachedFiles.value.splice(index, 1)
+}
+
+async function handleSend() {
+  const text = inputText.value.trim()
+  if (!text && attachedFiles.value.length === 0) return
+
+  // 立即清空输入框
+  inputText.value = ''
+  if (attachedFiles.value.length > 0) {
+    try {
+      await sendFileMessage(attachedFiles.value, text)
+    } finally {
+      attachedFiles.value = [] // 确保清空
+    }
+  } else {
+    // 普通文本消息
+    await sendMessage(text)
+  }
 }
 
 function handleResize() {
-  if (isMobile()) {
-    sidebarCollapsed.value = true
-  } else {
-    sidebarCollapsed.value = false
-  }
-}
-
-function handleOcrResults(results: OcrResultItem[]) {
-  addOcrResult(results)
+  if (isMobile()) sidebarCollapsed.value = true
+  else sidebarCollapsed.value = false
 }
 
 onMounted(() => {
@@ -120,7 +176,6 @@ onMounted(() => {
   window.addEventListener('resize', handleResize)
   loadConversations()
 })
-
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)
@@ -187,10 +242,109 @@ onBeforeUnmount(() => {
   color: #666;
 }
 
-/* 移动端样式 */
+.input-area {
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+  position: relative;
+}
+
+.input-wrapper {
+  position: relative;
+}
+
+.input-wrapper :deep(.el-textarea__inner) {
+  padding-bottom: 50px; /* 为按钮留出空间 */
+}
+
+.input-actions {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: flex;
+  gap: 8px;
+}
+
+.attach-btn,
+.send-btn {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid #409eff;
+  background: #409eff;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.send-btn.is-loading {
+  background: #fff;
+  color: #409eff;
+  border-color: #409eff;
+  cursor: not-allowed;
+}
+
+.stop-icon {
+  width: 12px;
+  height: 12px;
+  background: #409eff;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.file-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.file-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: #f5f5f5;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #333;
+}
+
+.file-name {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-remove {
+  cursor: pointer;
+  color: #999;
+  font-size: 14px;
+}
+.file-remove:hover {
+  color: #f56c6c;
+}
+/* 移动端不改变布局，只调整间距 */
 @media (max-width: 768px) {
-  .chat-page {
-    padding: 10px;
+  .input-area {
+    padding: 0 10px;
+  }
+  .input-actions {
+    right: 8px;
+    bottom: 8px;
+  }
+  .attach-btn,
+  .send-btn {
+    width: 34px;
+    height: 34px;
+  }
+  .stop-icon {
+    width: 10px;
+    height: 10px;
   }
 }
 </style>

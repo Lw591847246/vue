@@ -25,6 +25,10 @@ const emit = defineEmits<{
   (e: 'ocr-results', results: OcrResultItem[]): void
 }>()
 
+const props = defineProps<{
+  sessionId: string   // 新增，由父组件传入当前会话ID
+}>()
+
 const loading = ref(false)
 
 function beforeUpload(file: File) {
@@ -58,7 +62,7 @@ async function handleUpload(options: any) {
 
   loading.value = true
   try {
-    const data = await uploadImagesForOcr(rawFiles)
+    const data = await uploadImagesForOcr(rawFiles, props.sessionId)
     if (data.type === 'ocr' && Array.isArray(data.results)) {
       emit('ocr-results', data.results)
       ElMessage.success('识别完成，结果已加入对话')
