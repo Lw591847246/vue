@@ -235,6 +235,145 @@ export function useChatConversation() {
     }
   }
 
+  // ========== 复制消息 ==========
+  async function copyMessage(index: number) {
+    const msg = messages.value[index]
+    if (!msg || msg.role !== 'user') return
+
+    const textToCopy = msg.user || ''
+    if (!textToCopy) return
+
+    try {
+      await navigator.clipboard.writeText(textToCopy)
+      ElMessage.success('已复制到剪贴板')
+    } catch (err) {
+      const textarea = document.createElement('textarea')
+      textarea.value = textToCopy
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.select()
+      try {
+        document.execCommand('copy')
+        ElMessage.success('已复制到剪贴板')
+      } catch (e) {
+        ElMessage.error('复制失败，请手动复制')
+      }
+      document.body.removeChild(textarea)
+    }
+  }
+
+  // ========== 重新生成 ==========
+// ========== 重新生成（原位重置助手消息） ==========
+async function regenerateMessage(index: number) {
+  if (loading.value) return
+
+  const userMsg = messages.value[index]
+  if (!userMsg || userMsg.role !== 'user') return
+  const text = userMsg.user || ''
+  if (!text.trim()) return
+
+  // 找到紧邻其后的助手消息
+  const assistantIndex = index + 1
+  const assistantMsg = messages.value[assistantIndex]
+  if (!assistantMsg || assistantMsg.role !== 'assistant') return
+
+  // 只重置这一条助手消息，用户消息和其他轮次不动
+  assistantMsg.bot = ''
+  assistantMsg.thinking = ''
+  assistantMsg.thinkingDone = false
+  assistantMsg.duration = ''
+  assistantMsg.imageUrl = undefined
+
+  const startTime = Date.now()
+  loading.value = true
+  await scrollToBottom()
+
+  try {
+    const response = await sendChatMessage(text, currentSessionId.value)
+    const contentType = response.headers.get('Content-Type') || ''
+
+    if (contentType.includes('application/json')) {
+      const data = await response.json()
+      if (data.type === 'image') {
+        assistantMsg.imageUrl = 'data:image/png;base64,' + data.image_base64
+        assistantMsg.bot = '[图片已生成]'
+      } else if (data.type === 'multi') {
+        let textParts: string[] = []
+        for (const item of data.results || []) {
+          if (item.type === 'text' && item.content) {
+            textParts.push(item.content)
+          } else if (item.type === 'image') {
+            if (!assistantMsg.imageUrl && item.image_base64) {
+              assistantMsg.imageUrl = 'data:image/png;base64,' + item.image_base64
+            }
+            textParts.push('[图片已生成]')
+          }
+        }
+        assistantMsg.bot = textParts.join('\n\n')
+      } else {
+        assistantMsg.bot = data.content || ''
+      }
+      await scrollToBottom()
+    } else {
+      // 流式响应
+      const reader = response.body!.getReader()
+      const decoder = new TextDecoder('utf-8')
+      let buffer = ''
+      let thinkingActive = false
+      let answerActive = false
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+
+        while (buffer.length > 0) {
+          const char = buffer.charAt(0)
+          buffer = buffer.slice(1)
+
+          if (!thinkingActive && !answerActive) {
+            if (char === '<' && buffer.startsWith('think>')) {
+              buffer = buffer.slice(6)
+              thinkingActive = true
+              assistantMsg.thinkingDone = false
+              continue
+            } else {
+              answerActive = true
+              assistantMsg.bot = (assistantMsg.bot || '') + char
+            }
+          } else if (thinkingActive) {
+            if (char === '<' && buffer.startsWith('/think>')) {
+              buffer = buffer.slice(7)
+              thinkingActive = false
+              assistantMsg.thinkingDone = true
+              continue
+            } else {
+              assistantMsg.thinking = (assistantMsg.thinking || '') + char
+            }
+          } else {
+            assistantMsg.bot = (assistantMsg.bot || '') + char
+          }
+        }
+        await scrollToBottom()
+      }
+      if (thinkingActive) {
+        thinkingActive = false
+        assistantMsg.thinkingDone = true
+      }
+    }
+  } catch (error) {
+    console.error('重新生成失败', error)
+    assistantMsg.bot = (assistantMsg.bot || '') + '\n[重新生成失败，请稍后重试]'
+    await scrollToBottom()
+  } finally {
+    loading.value = false
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(2)
+    assistantMsg.duration = elapsed
+    await scrollToBottom()
+  }
+}
+
   // ========== 普通文本消息发送 ==========
   async function sendMessage(text: string) {
     const trimmed = text.trim()
@@ -368,5 +507,7 @@ export function useChatConversation() {
     sendMessage,
     scrollToBottom,
     addOcrResult,
+    copyMessage, // 新增
+    regenerateMessage, // 新增
   }
 }

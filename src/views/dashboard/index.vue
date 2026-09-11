@@ -32,6 +32,8 @@
           v-else-if="messages.length > 0"
           ref="messageListRef"
           :messages="messages"
+          @copy="handleCopy"
+          @regenerate="handleRegenerate"
         />
 
         <div class="input-area">
@@ -101,6 +103,8 @@ const {
   startNewConversation,
   selectConversation,
   sendMessage,
+    copyMessage,
+  regenerateMessage,
 } = useChatConversation()
 
 const sidebarCollapsed = ref(false)
@@ -108,6 +112,14 @@ const inputText = ref('')
 const attachedFiles = ref<File[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
 const messageListRef = ref<InstanceType<typeof ChatMessageList> | null>(null)
+
+function handleCopy(index: number) {
+  copyMessage(index)
+}
+
+function handleRegenerate(index: number) {
+  regenerateMessage(index)
+}
 
 function isMobile() {
   return window.innerWidth < 768

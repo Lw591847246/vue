@@ -7,6 +7,20 @@
         <div v-if="msg.files && msg.files.length > 0" class="user-files">
           <div v-for="file in msg.files" :key="file" class="user-file-item">📄 {{ file }}</div>
         </div>
+
+        <!-- 操作按钮（复制 / 重新生成） -->
+        <div class="message-actions">
+          <el-tooltip content="复制本次提问" placement="top">
+            <el-icon class="action-icon" @click="handleCopy(index)">
+              <CopyDocument />
+            </el-icon>
+          </el-tooltip>
+          <el-tooltip content="重新生成" placement="top">
+            <el-icon class="action-icon" @click="handleRegenerate(index)">
+              <Refresh />
+            </el-icon>
+          </el-tooltip>
+        </div>
       </div>
       <!-- 机器人消息（左侧） -->
       <div v-else class="bot-message">
@@ -20,8 +34,15 @@
         </div>
 
         <div class="answer-content" v-html="renderBotContent(msg.bot || '')"></div>
-
-        <div v-if="msg.duration" class="duration-info">耗时 {{ msg.duration }} 秒</div>
+        <!-- 回答完成后才显示：复制按钮在左，耗时在右，整体右对齐 -->
+        <div v-if="msg.duration" class="bot-footer">
+          <el-tooltip content="复制回答内容" placement="top">
+            <el-icon class="copy-answer-icon" @click="handleCopyAnswer(msg)">
+              <CopyDocument />
+            </el-icon>
+          </el-tooltip>
+          <span class="duration-info">耗时 {{ msg.duration }} 秒</span>
+        </div>
       </div>
     </div>
   </div>
@@ -30,10 +51,49 @@
 <script setup lang="ts">
 import { ref, watch, nextTick } from 'vue'
 import type { ChatMessage } from '@/types/agent/agent'
+import { ElMessage } from 'element-plus'
 
+const emit = defineEmits<{
+  (e: 'copy', index: number): void
+  (e: 'regenerate', index: number): void
+}>()
 const props = defineProps<{ messages: ChatMessage[] }>()
 
 const messageListRef = ref<HTMLElement | null>(null)
+
+// 复制机器人回答文本内容
+async function handleCopyAnswer(msg: ChatMessage) {
+  const text = msg.bot || ''
+  if (!text) return
+
+  try {
+    await navigator.clipboard.writeText(text)
+    ElMessage.success('已复制回答内容')
+  } catch (err) {
+    // 兼容 fallback
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.style.position = 'fixed'
+    textarea.style.opacity = '0'
+    document.body.appendChild(textarea)
+    textarea.select()
+    try {
+      document.execCommand('copy')
+      ElMessage.success('已复制回答内容')
+    } catch (e) {
+      ElMessage.error('复制失败，请手动复制')
+    }
+    document.body.removeChild(textarea)
+  }
+}
+
+function handleCopy(index: number) {
+  emit('copy', index)
+}
+
+function handleRegenerate(index: number) {
+  emit('regenerate', index)
+}
 
 function escapeHtml(text: string): string {
   return text
@@ -135,6 +195,24 @@ defineExpose({ messageListRef })
   margin-bottom: 20px;
 }
 
+/* 操作按钮 */
+.message-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #eee;
+}
+.action-icon {
+  cursor: pointer;
+  font-size: 16px;
+  color: #999;
+  transition: color 0.2s;
+}
+.action-icon:hover {
+  color: #409eff;
+}
+
 .user-message {
   max-width: 70%;
   background: #d9ecff;
@@ -172,7 +250,7 @@ defineExpose({ messageListRef })
   color: #666;
 }
 .user-file-item {
-  background: rgba(255,255,255,0.6);
+  background: rgba(255, 255, 255, 0.6);
   padding: 2px 6px;
   border-radius: 4px;
 }
@@ -214,11 +292,28 @@ defineExpose({ messageListRef })
   max-width: 100%; /* 确保不超出父容器 */
 }
 
+.bot-footer {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.copy-answer-icon {
+  cursor: pointer;
+  font-size: 15px;
+  color: #999;
+  transition: color 0.2s;
+}
+.copy-answer-icon:hover {
+  color: #409eff;
+}
+
 .duration-info {
   font-size: 0.75rem;
   color: #aaa;
-  margin-top: 8px;
-  text-align: right;
 }
 
 .answer-content :deep(h2) {
